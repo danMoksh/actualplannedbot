@@ -1,2 +1,13 @@
+# Data and environment
 bot_data.json
+.env
+.env.*
+
+# Virtual environment
 venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
