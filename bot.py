@@ -78,8 +78,27 @@ def save_db():
     with open(DB_FILE, "w") as f:
         json.dump(db, f)
 
-def init_user(uid):
+
+def schedule_jobs_for_user(context, uid_str):
+    uid_str = str(uid_str)
+    jq = context.job_queue if hasattr(context, "job_queue") else getattr(context.application, "job_queue", None)
+    if not jq: return
+    
+    if jq.get_jobs_by_name(f"ping_{uid_str}"):
+        return
+        
+    now = datetime.now(IST)
+    delay = ((now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)) - now).total_seconds()
+    if delay < 0: delay += 3600 # safety
+    
+    jq.run_daily(send_midnight_report, time=time(hour=0, minute=0, second=0, tzinfo=IST), chat_id=int(uid_str), name=f"midnight_{uid_str}")
+    jq.run_repeating(hourly_ping, interval=3600, first=delay, chat_id=int(uid_str), name=f"ping_{uid_str}")
+    jq.run_monthly(monthly_archive_dump, when=time(0, 0, tzinfo=IST), day=1, chat_id=int(uid_str), name=f"monthly_{uid_str}")
+
+def init_user(uid, context=None):
     uid = str(uid)
+    if context:
+        schedule_jobs_for_user(context, uid)
     if uid not in db:
         db[uid] = {"logs": {}, "msg_map": {}, "last_ping": None, "tasks": {}, "session_start": 0, "is_sleeping": False}
         save_db()
@@ -249,7 +268,7 @@ async def check_triage(uid, update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
 # --- task dashboard rendering ---
 async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     await check_triage(uid, update, context)
     mapping = get_task_mapping(uid)
     
@@ -377,7 +396,7 @@ async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 # --- task crud commands ---
 async def wakeup_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     parts = update.message.text.split()
     now_ist = datetime.now(IST)
     
@@ -418,7 +437,7 @@ async def wakeup_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await show_tasks(update, context)
 
 async def sleep_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     
     if db[uid].get("is_sleeping"):
         await update.message.reply_text("you are already in sleep mode. use `/add` to prep tomorrow's tasks.", parse_mode="Markdown")
@@ -460,7 +479,7 @@ async def sleep_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text("⋆｡°✩ sleep mode activated. goodnight. you can now `/add` tomorrow's tasks.", parse_mode="Markdown")
 
 async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     parts = update.message.text.split(maxsplit=2)
     if len(parts) < 3:
         await update.message.reply_text("format: `/add [quadrant] [task 1 \n task 2]`", parse_mode="Markdown")
@@ -485,7 +504,7 @@ async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f"[✓] added {len([t for t in tasks_to_add if t.strip()])} task(s).")
 
 async def addsub_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     mapping = get_task_mapping(uid)
     parts = update.message.text.split(maxsplit=2)
     if len(parts) < 3:
@@ -508,7 +527,7 @@ async def addsub_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("invalid task number.")
 
 async def done_shortcut(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     mapping = get_task_mapping(uid)
     try:
         parts = update.message.text.split()[1].split('.')
@@ -529,7 +548,7 @@ async def done_shortcut(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("format: `/done 1` or `/done 1.2`", parse_mode="Markdown")
 
 async def rev_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     mapping = get_task_mapping(uid)
     try:
         display_id = int(update.message.text.split()[1]) - 1
@@ -541,7 +560,7 @@ async def rev_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("format: `/rev [number]`")
 
 async def high_priority(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     mapping = get_task_mapping(uid)
     try:
         display_id = int(update.message.text.split()[1]) - 1
@@ -554,7 +573,7 @@ async def high_priority(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("format: `/high [number]`")
 
 async def edit_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     mapping = get_task_mapping(uid)
     try:
         parts = update.message.text.split(maxsplit=2)
@@ -566,7 +585,7 @@ async def edit_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("format: `/edit [number] [new text]`", parse_mode="Markdown")
 
 async def del_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     mapping = get_task_mapping(uid)
     try:
         display_id = int(update.message.text.split()[1]) - 1
@@ -579,7 +598,7 @@ async def del_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("format: `/del [number]`", parse_mode="Markdown")
 
 async def set_today(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     try:
         text = update.message.text.split(" ", 1)[1]
         db[uid]["targets"]["today"] = text
@@ -589,7 +608,7 @@ async def set_today(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         pass
 
 async def set_week(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     try:
         text = update.message.text.split(" ", 1)[1]
         db[uid]["targets"]["weekly"] = text
@@ -599,7 +618,7 @@ async def set_week(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         pass
 
 async def set_month(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     try:
         text = update.message.text.split(" ", 1)[1]
         db[uid]["targets"]["monthly"] = text
@@ -609,7 +628,7 @@ async def set_month(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         pass
 
 async def view_archive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     archive = db[uid]["archive"]
     if not archive:
         await update.message.reply_text("archive is empty.")
@@ -620,7 +639,7 @@ async def view_archive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(text, parse_mode="Markdown")
 
 async def view_goals(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     targets = db[uid].get("targets", {"today": "", "weekly": "", "monthly": ""})
     target_msg = f"✦ *current goals*\n\n*today:* {targets.get('today', '') or 'none'}\n*weekly:* {targets.get('weekly', '') or 'none'}\n*monthly:* {targets.get('monthly', '') or 'none'}"
     await update.message.reply_text(target_msg, parse_mode="Markdown")
@@ -658,10 +677,11 @@ async def post_init(application: Application) -> None:
     await application.bot.set_my_commands(commands)
     now = datetime.now(IST)
     delay = ((now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)) - now).total_seconds()
+    class AppContext:
+        def __init__(self, app): self.application = app; self.job_queue = app.job_queue
+    app_ctx = AppContext(application)
     for uid_str in db.keys():
-        application.job_queue.run_daily(send_midnight_report, time=time(hour=0, minute=0, second=0, tzinfo=IST), chat_id=int(uid_str))
-        application.job_queue.run_repeating(hourly_ping, interval=3600, first=delay, chat_id=int(uid_str))
-        application.job_queue.run_monthly(monthly_archive_dump, when=time(0, 0, tzinfo=IST), day=1, chat_id=int(uid_str))
+        schedule_jobs_for_user(app_ctx, uid_str)
 
 async def send_midnight_report(context: ContextTypes.DEFAULT_TYPE) -> None:
     now_ist = datetime.now(IST)
@@ -690,7 +710,7 @@ async def hourly_ping(context: ContextTypes.DEFAULT_TYPE) -> None:
     save_db()
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     text = update.message.text.strip()
     
     if text == "▤ show tasks":
@@ -856,6 +876,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 # --- boring commands ---
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    init_user(str(update.effective_chat.id), context)
     text = (
         "✦ *obsidian logger & task bot*\n\n"
         "*time tracking (the 24h grid):*\n"
@@ -883,13 +904,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=MAIN_KB)
 
 async def export_table(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     today_str = datetime.now(IST).strftime("%Y-%m-%d")
     init_day(uid, today_str)
     await send_table_for_date(context, update.effective_chat.id, uid, today_str, rf"▤ current export \({today_str.replace('-', r'\-')}\)")
 
 async def clear_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    uid = init_user(str(update.effective_chat.id))
+    uid = init_user(str(update.effective_chat.id), context)
     today_str = datetime.now(IST).strftime("%Y-%m-%d")
     db[uid]["logs"][today_str] = {f"{i:02d}:00": {"plan": "", "actual": "", "notes": ""} for i in range(24)}
     save_db()
