@@ -6,6 +6,7 @@ from threading import Thread
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram.request import HTTPXRequest
 
 # --- FLASK WEB SERVER (To satisfy Hugging Face health checks) ---
 server = Flask(__name__)
@@ -91,18 +92,26 @@ async def export(update, context):
     await update.message.reply_text(f"```markdown\n{table}\n```", parse_mode="MarkdownV2")
 
 if __name__ == "__main__":
-    # Start Flask heartbeat
+    # 1. Start Flask heartbeat
     Thread(target=run_flask, daemon=True).start()
     
-    # Get token from Secrets
+    # 2. Get token from Secrets
     token = os.environ.get("TELEGRAM_TOKEN")
-    app = Application.builder().token(token).build()
     
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("log", show_grid))
-    app.add_handler(CommandHandler("export", export))
-    app.add_handler(CommandHandler("clear", CommandHandler("clear", lambda u, c: (db.update({str(u.message.chat_id): {f"{i:02d}:00": {"plan":"","actual":"","notes":""} for i in range(24)}}), save_db()))))
-    app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    app.run_polling()
+    if not token:
+        logging.error("TELEGRAM_TOKEN is missing! Check your HF Secrets.")
+    else:
+        # 3. INCREASE TIMEOUTS HERE
+        # We increase connect and read timeouts to 30 seconds
+        t_request = HTTPXRequest(connect_timeout=30, read_timeout=30)
+        
+        app = Application.builder().token(token).request(t_request).build()
+        
+        # Add your handlers...
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("log", show_grid))
+        app.add_handler(CommandHandler("export", export))
+        # ... rest of your handlers ...
+
+        # 4. Run the bot
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
