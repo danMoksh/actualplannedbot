@@ -190,11 +190,6 @@ async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_text(dashboard, reply_markup=InlineKeyboardMarkup(kb), parse_mode="MarkdownV2")
         return
 
-    # Mode 2: MAIN BOARD -----------------------------------------------------
-    if not mapping:
-        await update.message.reply_text("_no tasks yet\\. type /add to start\\._\n", parse_mode="MarkdownV2", reply_markup=MAIN_KB)
-        return
-
     start_ts = db[uid].get("session_start", datetime.now(IST).timestamp())
     base_dt = datetime.fromtimestamp(start_ts, IST)
     
