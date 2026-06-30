@@ -3,10 +3,12 @@ import logging
 import os
 import uuid
 import random
+import asyncio
 from datetime import datetime, time, timedelta
 
 import pytz
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update, ReplyKeyboardMarkup
+from telegram.error import NetworkError, TimedOut
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -699,6 +701,24 @@ async def send_midnight_report(context: ContextTypes.DEFAULT_TYPE) -> None:
     init_day(uid, now_ist.strftime("%Y-%m-%d"))
     cleanup_old_data(uid, now_ist)
 
+async def _send_ping(bot, chat_id, uid, date_str, hour_str, is_asleep=False, max_retries=15):
+    for attempt in range(max_retries):
+        try:
+            msg = await bot.send_message(
+                chat_id,
+                text=f"⌕ {hour_str} check-in.\nreply to this message with:\n1. plan\n2. actual\n3. notes\n\n(tip: leave a line blank to keep your previous text)",
+                disable_notification=is_asleep
+            )
+            db[uid]["msg_map"][str(msg.message_id)] = {"date": date_str, "hour": hour_str}
+            db[uid]["last_ping"] = str(msg.message_id)
+            save_db()
+            return
+        except (NetworkError, TimedOut) as e:
+            logging.warning(f"Ping {hour_str} attempt {attempt + 1}/{max_retries} failed: {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(60)
+    logging.error(f"Failed to send {hour_str} ping after {max_retries} attempts.")
+
 async def hourly_ping(context: ContextTypes.DEFAULT_TYPE) -> None:
     uid = str(context.job.chat_id)
     now_ist = datetime.now(IST)
@@ -706,13 +726,9 @@ async def hourly_ping(context: ContextTypes.DEFAULT_TYPE) -> None:
     hour_str = now_ist.strftime("%H:00")
     init_user(uid)
     init_day(uid, date_str)
-    msg = await context.bot.send_message(
-        context.job.chat_id,
-        text=f"⌕ {hour_str} check-in.\nreply to this message with:\n1. plan\n2. actual\n3. notes\n\n(tip: leave a line blank to keep your previous text)",
-    )
-    db[uid]["msg_map"][str(msg.message_id)] = {"date": date_str, "hour": hour_str}
-    db[uid]["last_ping"] = str(msg.message_id)
-    save_db()
+    is_asleep = db[uid].get("is_sleeping", False)
+    # Fire retries in background so the job queue is never blocked
+    asyncio.create_task(_send_ping(context.bot, context.job.chat_id, uid, date_str, hour_str, is_asleep))
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     uid = init_user(str(update.effective_chat.id), context)
