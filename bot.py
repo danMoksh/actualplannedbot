@@ -143,6 +143,11 @@ def cleanup_old_data(uid, now_ist):
             keys_to_delete.append(d_str)
     for k in keys_to_delete:
         del db[uid]["logs"][k]
+    # prune stale msg_map entries
+    cutoff_date = (now_ist - timedelta(days=3)).strftime("%Y-%m-%d")
+    stale_msgs = [mid for mid, mdata in db[uid]["msg_map"].items() if mdata.get("date", "9999-99-99") < cutoff_date]
+    for mid in stale_msgs:
+        del db[uid]["msg_map"][mid]
     save_db()
 
 # --- task domain helpers ---
