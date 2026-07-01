@@ -212,11 +212,18 @@ async def monthly_archive_dump(context: ContextTypes.DEFAULT_TYPE) -> None:
     archive = db[uid]["archive"]
     if not archive: return
     
+    is_asleep = db[uid].get("is_sleeping", False)
+    
     report = "⨯ *monthly archive dump*\n\n"
     for t in archive:
         report += f" - {t}\n"
     
-    await context.bot.send_message(context.job.chat_id, text=report, parse_mode="Markdown")
+    await context.bot.send_message(
+        context.job.chat_id, 
+        text=report, 
+        parse_mode="Markdown",
+        disable_notification=is_asleep
+    )
     db[uid]["archive"] = []
     save_db()
 
@@ -660,7 +667,14 @@ async def send_table_for_date(context_or_bot, chat_id, uid, date_str, header_tex
         row = data.get(h, {"plan": "", "actual": "", "notes": ""})
         table += f"| {h} | {row.get('plan', '')} | {row.get('actual', '')} | {row.get('notes', '')} |\n"
     bot = context_or_bot.bot if hasattr(context_or_bot, "bot") else context_or_bot
-    await bot.send_message(chat_id, text=f"""{header_text}\n\n```markdown\n{table}\n```""", parse_mode="MarkdownV2", reply_markup=MAIN_KB)
+    is_asleep = db[uid].get("is_sleeping", False)
+    await bot.send_message(
+        chat_id, 
+        text=f"""{header_text}\n\n```markdown\n{table}\n```""", 
+        parse_mode="MarkdownV2", 
+        reply_markup=MAIN_KB,
+        disable_notification=is_asleep
+    )
 
 async def post_init(application: Application) -> None:
     commands = [
