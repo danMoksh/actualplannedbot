@@ -102,7 +102,7 @@ def init_user(uid, context=None):
     if context:
         schedule_jobs_for_user(context, uid)
     if uid not in db:
-        db[uid] = {"logs": {}, "msg_map": {}, "last_ping": None, "tasks": {}, "session_start": 0, "is_sleeping": False}
+        db[uid] = {"logs": {}, "msg_map": {}, "last_ping": None, "tasks": {}, "session_start": 0, "is_sleeping": False, "archive": [], "targets": {"today": "", "weekly": "", "monthly": ""}}
         save_db()
     else:
         if "tasks" not in db[uid]: db[uid]["tasks"] = {}
@@ -443,7 +443,15 @@ async def wakeup_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     # Separated Targets Message sent ONLY during wakeup
     targets = db[uid].get("targets", {"today": "", "weekly": "", "monthly": ""})
-    target_msg = f"✦ *targets*\n\n*today:* {targets.get('today', '') or 'none'}\n*weekly:* {targets.get('weekly', '') or 'none'}\n*monthly:* {targets.get('monthly', '') or 'none'}"
+    
+    now = datetime.now()
+    days_ahead = 0 - now.weekday()
+    if days_ahead <= 0:
+        days_ahead += 7
+    next_monday = now + timedelta(days=days_ahead)
+    next_monday_str = next_monday.strftime('%b %d').lower()
+    
+    target_msg = f"✦ *targets*\n\n*today:* {targets.get('today', '') or 'none'}\n*weekly {next_monday_str} :* {targets.get('weekly', '') or 'none'}\n*monthly :* {targets.get('monthly', '') or 'none'}"
     await update.message.reply_text(target_msg, parse_mode="Markdown")
 
     # Automatically show full board
@@ -655,7 +663,15 @@ async def view_archive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def view_goals(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     uid = init_user(str(update.effective_chat.id), context)
     targets = db[uid].get("targets", {"today": "", "weekly": "", "monthly": ""})
-    target_msg = f"✦ *current goals*\n\n*today:* {targets.get('today', '') or 'none'}\n*weekly:* {targets.get('weekly', '') or 'none'}\n*monthly:* {targets.get('monthly', '') or 'none'}"
+    
+    now = datetime.now()
+    days_ahead = 0 - now.weekday()
+    if days_ahead <= 0:
+        days_ahead += 7
+    next_monday = now + timedelta(days=days_ahead)
+    next_monday_str = next_monday.strftime('%b %d').lower()
+    
+    target_msg = f"✦ *current goals*\n\n*today:* {targets.get('today', '') or 'none'}\n*weekly {next_monday_str} :* {targets.get('weekly', '') or 'none'}\n*monthly :* {targets.get('monthly', '') or 'none'}"
     await update.message.reply_text(target_msg, parse_mode="Markdown")
 
 # --- original time logging logic ---
