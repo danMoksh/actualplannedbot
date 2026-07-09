@@ -825,6 +825,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     # View Quadrant Isolator
     if data.startswith("vq_"):
+        await query.answer()
         quad_key = data.split("_")[1]
         if quad_key == "back":
             context.user_data["view_quad"] = None
@@ -834,6 +835,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     if data.startswith("focus_"):
+        await query.answer()
         if data == "focus_back":
             context.user_data["focus_tid"] = None
         else:
