@@ -726,7 +726,8 @@ async def send_midnight_report(context: ContextTypes.DEFAULT_TYPE) -> None:
     uid = str(context.job.chat_id)
     init_user(uid)
     init_day(uid, yesterday_str)
-    header = rf"☾ daily obsidian export \({yesterday_str.replace('-', r'\-')}\)"
+    yesterday_escaped = yesterday_str.replace('-', r'\-')
+    header = rf"☾ daily obsidian export \({yesterday_escaped}\)"
     await send_table_for_date(context, context.job.chat_id, uid, yesterday_str, header)
     init_day(uid, now_ist.strftime("%Y-%m-%d"))
     cleanup_old_data(uid, now_ist)
@@ -809,7 +810,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if target_date != today_str:
         sent_msg = await update.message.reply_text(f"[✓] late log updated for {target_date} ({target_hour}).")
-        header = fr"⤹ updated export \({target_date.replace('-', r'\-')}\)"
+        target_date_escaped = target_date.replace('-', r'\-')
+        header = fr"⤹ updated export \({target_date_escaped}\)"
         await send_table_for_date(context, update.message.chat_id, uid, target_date, header)
     else:
         sent_msg = await update.message.reply_text(f"[✓] logged for {target_hour}.")
@@ -960,7 +962,8 @@ async def export_table(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     uid = init_user(str(update.effective_chat.id), context)
     today_str = datetime.now(IST).strftime("%Y-%m-%d")
     init_day(uid, today_str)
-    await send_table_for_date(context, update.effective_chat.id, uid, today_str, rf"▤ current export \({today_str.replace('-', r'\-')}\)")
+    today_escaped = today_str.replace('-', r'\-')
+    await send_table_for_date(context, update.effective_chat.id, uid, today_str, rf"▤ current export \({today_escaped}\)")
 
 async def clear_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     uid = init_user(str(update.effective_chat.id), context)
