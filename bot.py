@@ -890,7 +890,7 @@ async def show_grid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("select hour to log:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 if __name__ == "__main__":
-    app = Application.builder().token("8688342710:AAFT05PL2rlTjV7niWiNVqB6IR_5KSBOY-U").request(HTTPXRequest(connect_timeout=30, read_timeout=30)).post_init(post_init).build()
+    app = Application.builder().token(os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")).request(HTTPXRequest(connect_timeout=30, read_timeout=30)).post_init(post_init).build()
     
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("start", help_command))

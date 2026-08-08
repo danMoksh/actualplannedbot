@@ -1,11 +1,1 @@
----
-title: Tgactualplanned
-emoji: 😻
-colorFrom: red
-colorTo: blue
-sdk: docker
-pinned: false
-license: mit
----
-
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+`the bot i use to track every hour of mine and as my todo list`
