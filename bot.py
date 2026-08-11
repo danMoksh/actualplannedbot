@@ -92,7 +92,7 @@ def schedule_jobs_for_user(context, uid_str):
     if delay < 0: delay += 3600 # safety
     
     jq.run_daily(send_midnight_report, time=time(hour=0, minute=0, second=0, tzinfo=IST), chat_id=int(uid_str), name=f"midnight_{uid_str}")
-    jq.run_repeating(hourly_ping, interval=3600, first=delay, chat_id=int(uid_str), name=f"ping_{uid_str}")
+    jq.run_repeating(hourly_ping, interval=3600, first=delay, chat_id=int(uid_str), name=f"ping_{uid_str}", job_kwargs={"misfire_grace_time": None})
     jq.run_monthly(monthly_archive_dump, when=time(0, 0, tzinfo=IST), day=1, chat_id=int(uid_str), name=f"monthly_{uid_str}")
 
 def init_user(uid, context=None):
